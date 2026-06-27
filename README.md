@@ -5,9 +5,6 @@ L'objectif de ce travail était de développer un agent intelligent basé sur l'
 
 La démarche adoptée s'est articulée autour de plusieurs étapes complémentaires. Elle a d'abord consisté à constituer une source documentaire fiable, puis à préparer et vectoriser les données afin de permettre une recherche sémantique efficace. Nous avons ensuite conçu et développé les différents outils (Tools) nécessaires au fonctionnement de l'agent, avant de mettre en œuvre son architecture de raisonnement à l'aide de LangGraph. Enfin, plusieurs phases d'optimisation du code, de tests et d'évaluation ont été réalisées afin d'améliorer les performances et la robustesse du système.
 
-
-
-
 ## Fonctionnement du Système
 
 Le fonctionnement global de l'agent est résumé par les étapes suivantes :
@@ -31,7 +28,6 @@ L'utilisation de LangGraph permet de contrôler précisément les différentes �
 | Génération des réponses | Cohérente |
 | Temps moyen de réponse | 1 minute en moyenne  |
 
-
 ## Limites et axes d'amélioration 
 ### Limites 
 - Certaines informations de DataTourisme sont incomplètes ; 
@@ -44,6 +40,7 @@ L'utilisation de LangGraph permet de contrôler précisément les différentes �
 - Élargir et Enrichir la base documentaire pour une couverture de la France métropolitaine d'autres sources touristiques (DOM-TOM, Guadeloupe, Martinique, Guyane, La Réunion, Mayotte); 
 - Intégrer un agent spécialisé dans le calcul d'itinéraires touristiques ; 
 - Générer des recommandations personnalisées selon le profil de l'utilisateur ; 
+- Ajouter un routage conditionnel qui analyse la question de l’utilisateur; 
 - Ajouter une interface web interactive permettant de visualiser les lieux sur une carte. 
 
 ## Simulation
