@@ -231,8 +231,11 @@ from langchain_core.messages import HumanMessage, SystemMessage
 def agent(state: State):
     messages = [
         SystemMessage(content=
-            "Tu es un assistant touristique spécialisé sur la France. "
-            "Utilise les outils si nécessaire pour obtenir des informations."
+            "Tu es un assistant touristique spécialisé sur la France Métropolitaine "
+            "Utilise les outils si nécessaire pour obtenir des informations." \
+            "Lorsque tu reçois un résultat d'outil,"\
+            "utilise-le pour répondre à l'utilisateur."\
+            "Ne rappelle pas le même outil si tu disposes déjà des informations nécessaires."
         ),
         HumanMessage(content=state["query"])
     ] + state.get("messages", [])
