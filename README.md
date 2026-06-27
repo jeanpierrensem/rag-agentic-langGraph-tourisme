@@ -21,15 +21,6 @@ Le fonctionnement global de l'agent est résumé par les étapes suivantes :
 - Une réponse finale est retournée à l'utilisateur. 
 L'utilisation de LangGraph permet de contrôler précisément les différentes étapes du raisonnement de l'agent.
 
-
-- asyncio : utilisation des E/S en mode asynchrone, non bloquant
-- mcp.server.fastmcp :  FastMCP
-- tavily :  TavilyClient
-- typing : Dict, Any
-- requests import get
-
-
-
 ## Résultats Obtenus
 
 | Critère | Résultat |
