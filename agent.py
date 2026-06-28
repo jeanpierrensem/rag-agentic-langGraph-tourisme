@@ -17,12 +17,13 @@ from qdrant_client.models import (
     )
 from qdrant_client import QdrantClient
 from langchain_community.embeddings import HuggingFaceEmbeddings
+#####   1 -Prétraitement et Construction de la source de données.
 
-#####   1 - Construction de la source de données et Prétraitement
-#chargement des variable d'environnement, clé open AI
+#loading environment variables, OpenAI key and LangSmith
 load_dotenv()
 
-#crteation du modèle
+
+#model creation
 model = ChatOllama(
     model="llama3.2", 
     temperature=0
@@ -32,12 +33,14 @@ df = pd.read_csv(
     sep=",", 
     encoding="utf-8"
 )
-#Les coordonnées sont essentielles.
+#location details are essential; lines without locations details must be removed.
 df = df[df["Latitude"].notna()]
 df = df[df["Longitude"].notna()]
 
-#Vérifier aussi les valeurs aberrantes :
-#Latitude : 41°N → 51.5°N Longitude : -5° → 10°
+
+# Also check for outliers:
+# Latitude: 41°N → 51.5°N Longitude: -5° → 10°
+# For metropolitan France.
 df = df[
 (df["Latitude"] > 41) &
 (df["Latitude"] < 52)
@@ -46,18 +49,21 @@ df = df[
 df = df[
 (df["Longitude"] > -5) &
 (df["Longitude"] < 11)
-] # Pour la France métropolitaine.
+] 
 
-df = df.drop_duplicates() # supprime les lignes identique
+# removes identical lines
+df = df.drop_duplicates() 
 df = df.drop_duplicates(subset=["Nom_du_POI", "Latitude", "Longitude"])
 
-#supprimer les lignes inutilisables, Un POI sans nom n'a aucun intérêt.
+
+#remove unusable rows; a POI without a name is of no use.
 df = df.dropna(
     subset=["Nom_du_POI"]
 )
-# remplacer les valeurs manquantes
-df["Description"] = df["Description"].fillna("")
 
+# replace missing values
+df["Description"] = df["Description"].fillna("")
+#Document creation
 def build_document(row) :
     return f"""
 Nom_du_POI : {row['Nom_du_POI']}
@@ -66,33 +72,32 @@ Adresse_postale : {row['Adresse_postale']}
 Code_postal_et_commune: {row['Code_postal_et_commune']}
 Description: {row['Description']}
 """.strip()
-def build_metadata(row):
-    metadata = {
-        "Nom_du_POI" : row['Nom_du_POI'], 
-        "Categories_de_POI" : row['Categories_de_POI'], 
-         "location": {
-            "lat": row["Latitude"],
-            "lon": row["Longitude"]
-        },
-        "Code_postal_et_commune" : row['Code_postal_et_commune']
-       
 
-}
-    return metadata
 df["document"] = df.apply(
     build_document,
     axis=1
 )
+# Setting up metadata
+def build_metadata(row):
+    metadata = {
+        "Nom_du_POI" : row['Nom_du_POI'], 
+        "Categories_de_POI" : row['Categories_de_POI'], 
+        "location": {
+            "lat": row["Latitude"],
+            "lon": row["Longitude"]
+        },
+        "Code_postal_et_commune" : row['Code_postal_et_commune']
+    }
+    return metadata
 
 df["metadata"] = df.apply(
     build_metadata,
     axis=1
 )
-
 documents = df["document"].tolist()
 metadatas = df["metadata"].tolist()
 
-#Convertir en Documents
+# Generation of documents and metadata for indexing
 from langchain_core.documents import Document
 docs_metadata = [
     Document(
@@ -102,27 +107,31 @@ docs_metadata = [
     for doc, meta in zip(df["document"], df["metadata"])
 ]
 ##### 2- vectorisation. 
-#connexion 
+
+#Initializing the connection to the vector store server
 client = QdrantClient(
     url="http://localhost:6333"
 )
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
+#
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 client.recreate_collection(
     collection_name="tourisme_tour_france",
     vectors_config=VectorParams(
-        size=384,  # IMPORTANT: dépend de ton modèle d'embedding
+        size=384,  # IMPORTANT: depends on your embedding template
         distance=Distance.COSINE
     )
 )
 
-#creation de vector_store persistant
+#creation of a persistent vector_store
 v_stores = QdrantVectorStore(
         client=client,
         collection_name="tourisme_tour_france",
         embedding=embeddings
     )
+
+#initialization and creation of chunks for documents and metadata
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=1000, 
@@ -144,14 +153,14 @@ if "tourisme_tour_france" not in existing:
             distance=Distance.COSINE
         )
     )
-#v_stores.add_documents(all_splits)
+v_stores.add_documents(all_splits)
 ##### 3- Développement des outils 
-
-# Tool to search for POI - Tool 1 : recherche vectorielle Qdrant
+# Tool to search for POI - Tool 1 : Qdrant vector search
 @tool
 def search_poi(query:str ) : 
     """
-     Recherche des points d'intérêt touristiques dans Qdrant. 
+    Recherche des points d'intérêt touristiques en France à l'aide d'une recherche vectorielle dans la base Qdrant.
+    À utiliser lorsque l'utilisateur demande des monuments, musées, châteaux, plages, parcs ou tout autre lieu touristique.
     """
     docs = v_stores.similarity_search(query, k=5)
 
@@ -168,7 +177,12 @@ def search_poi(query:str ) :
 
 @tool
 def search_nearby(latitude: float, longitude: float, radius_km: float = 10, limit: int = 10):
-    """Chercher dans le cadre du tourisme en france les point d'intérêt à partir de la géolocalisation """
+    """
+   
+   Recherche des points d'intérêt touristiques en France situés à proximité d'une position géographique donnée.
+   À utiliser lorsque l'utilisateur demande des lieux proches d'une ville, d'une adresse ou d'une position. 
+
+    """
     points, _ = client.scroll(
         collection_name="tourisme_tour_france",
         scroll_filter=Filter(
@@ -216,53 +230,62 @@ tools_by_name = {tool.name: tool for tool in tools}
 #on passe au modèle une liste des tools qui seront utilisés par ce dernier
 model_with_tools = model.bind_tools(tools)
 ##### 4- Développement de l’architecture du graphe LangGraph – mise en œuvre du RAG Agentic. 
-###### User Query -> LangGraph Agent -> Routeur(Tools) -> Context structuré (POIs)->  Réponse finale du LLM
 ##### 4.1-défnition du State
-
+#State is important. We keep track of all previous  responses
 class State(TypedDict):
     query: str
     messages : Annotated[list, add]
     pois : list[Dict]
     answer: str
-    steps: int
+    steps : int
 ##### 4.2-Noeud Agent
+# At this node of the graph, the agent maintains the conversational context, 
+# which is enriched during subsequent calls, with the aim of producing a 
+# more precise response.
 from langchain_core.messages import HumanMessage, SystemMessage
-
 def agent(state: State):
-    messages = [
+    if not state.get("messages") : # LLM subsequent call if required
+        messages = [
         SystemMessage(content=
-            "Tu es un assistant touristique spécialisé sur la France Métropolitaine "
-            "Utilise les outils si nécessaire pour obtenir des informations." \
-            "Lorsque tu reçois un résultat d'outil,"\
-            "utilise-le pour répondre à l'utilisateur."\
-            "Ne rappelle pas le même outil si tu disposes déjà des informations nécessaires."
+            """
+            Tu es un assistant touristique spécialisé sur la France Métropolitaine
+               
+            """
         ),
         HumanMessage(content=state["query"])
-    ] + state.get("messages", [])
+    ] 
+    else: 
+        messages = state["messages"] #first call only
+
+    # LLM request tools the use of tools (response will containt ToolMessage)
     response = model_with_tools.invoke(messages)
 
     return {
-        "messages": state.get("messages", []) + [response],
+        "messages": state.get("messages", []) + [response], #System, Human, AiMessage, tool_call -> ToolMessage 
         "steps": state.get("steps", 0) + 1
     }
 ##### 4.3-  Noeud de Tools
 from langgraph.prebuilt import ToolNode
-tool_node = ToolNode(tools)
+# if needed, LLM request to use all existing tools to answser the question
+tool_node = ToolNode(tools) # ToolMessage
 ##### 4.4 -Fonction de routage
+#What next ? tool_call or end the program ? 
 def should_continue(state):
     if state.get("steps", 0) > 3:
         return "end"
     last_message = state["messages"][-1]
-    
-    # si tool call → tools
+    #print(type(last_message))
+    #print(last_message)
+
+    # decide whether there is a need to call a tool
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
         return "tools"
 
-    # sinon on force final
+    # if not end the program and give hand back to LLM
     return "end"
 ##### 4.5- Noeud de fin
+# we are moving to the end
 def finalize(state: State):
-    
       # chercher le dernier message du LLM (pas tool)
     for msg in reversed(state["messages"]):
         if hasattr(msg, "content") and msg.content:
@@ -290,12 +313,10 @@ builder.add_conditional_edges(
 builder.add_edge("tools", "agent")
 builder.add_edge("final", END)
 
-builder = builder.compile()
+app = builder.compile()
 #### 6. Exécution
-result = builder.invoke({
-    "query": "",
-    "messages": [],
-    "pois": []
+result = app.invoke({
+    "query": "Peux-tu comparer les attractions touristiques de Nice et Marseille en termes de plages, culture et ambiance ?",
 })
 #print(result)
 print(result["answer"])
